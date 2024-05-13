@@ -2,18 +2,10 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <pthread.h>
+#include <semaphore.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <time.h>
-
-void milisleep(uint64_t miliseconds) {
-    struct timespec ts = {.tv_sec = (miliseconds / 1000),
-                          .tv_nsec = (miliseconds % 1000) * 1000000};
-
-    nanosleep(&ts, nullptr);
-}
 
 #define LEN 64
 int main() {
@@ -64,44 +56,23 @@ int main() {
     }
     printf("fd: %d\n", fd);
 
-    // const size_t len = 1'000'000;
-    // char *proc_mem_buf = calloc(len, sizeof(char));
-    // if (!proc_mem_buf) {
-    //     close(fd);
-    //     return 1;
-    // }
-    // off_t offset = lseek(fd, 0x7ffc9cc17000, SEEK_SET);
-    // ssize_t bytes_read =
-    //     read(fd, proc_mem_buf, 0x7ffc9cc38000 - 0x7ffc9cc17000);
-    // if (bytes_read == -1) {
-    //     printf("Couldn't read from file\n");
-    //     return 1;
-    // }
+    sem_t *semp = sem_open("/writer_semaphore", 0, 0666, 0);
+    if (semp == SEM_FAILED) {
+        printf("Failed to open semphore");
+        return 1;
+    }
 
-    // printf("Read %ld bytes form /proc/%d/mem\n", bytes_read, pid);
-    // for (ssize_t i = 0; i < bytes_read; i++) {
-    //     printf("%u", proc_mem_buf[bytes_read - i]);
-    // }
-    // printf("\n");
-    //  printf("%s", proc_mem_buf);
-    // free(proc_mem_buf);
-
-    lseek(fd, addr, SEEK_SET);
     char c = {};
+    lseek(fd, addr, SEEK_SET);
     while (true) {
-        char tmp = {};
-        ssize_t bytes_read = read(fd, &tmp, 1);
+        sem_wait(semp);
+        ssize_t bytes_read = read(fd, &c, 1);
+        printf("Bytes read: %ld\n", bytes_read);
         if (bytes_read == -1) {
             printf("Couldn't read from file\n");
             return 1;
         }
-        if (tmp != c){
-            c = tmp;
-            printf("Read value of c in proccess: %c (%u)\n", c, c);
-        }
-        lseek(fd, addr, SEEK_SET);
-        //milisleep(20);
-        //printf("c form proccess: %u\n", c);
+        printf("Read value of c in proccess: %c (%u)\n", c, c);
     }
     close(fd);
 }
